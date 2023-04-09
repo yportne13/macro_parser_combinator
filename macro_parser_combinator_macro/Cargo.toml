@@ -1,0 +1,13 @@
+[package]
+name = "macro_parser_combinator_macro"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+proc-macro = true
+
+[dependencies]
+macro_parser_combinator_core = { path="../macro_parser_combinator_core" }
+regex = "1"
