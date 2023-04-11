@@ -9,6 +9,9 @@ impl<F, I: Copy, O> Parser<F, I, O>
 where
     F: Fn(I, Location) -> (Result<O, (String, Location)>, I, Location) + Copy
 {
+    pub fn new(f: F) -> Self {
+        Self(f, PhantomData::<I>, PhantomData::<O>)
+    }
     pub fn run_with_out(&self, input: I, loc: Location) -> (Result<O, (String, Location)>, I, Location) {
         self.0(input, loc)
     }
@@ -35,6 +38,39 @@ where
         };
         Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<Vec<O>>)
     }
+    pub fn many_sep<Fs>(self, sep: Fs) -> Parser<impl Fn(I, Location) -> (Result<Vec<O>, (String, Location)>, I, Location) + Copy, I, Vec<O>>
+    where
+        Fs: Fn(I, Location) -> (Option<I>, Location) + Copy
+    {
+        let f = move |input: I, loc: Location| {
+            let mut ret = Vec::new();
+            let mut text = input;
+            let mut loc_parse = loc;
+            loop {
+                let parse = self.0(text, loc_parse);
+                match parse.0 {
+                    Ok(item) => {
+                        ret.push(item);
+                        let jump_sep = sep(parse.1, parse.2);
+                        match jump_sep.0 {
+                            Some(t) => {
+                                text = t;
+                                loc_parse = jump_sep.1;
+                            },
+                            None => {
+                                text = parse.1;
+                                loc_parse = parse.2;
+                                break
+                            },
+                        }
+                    },
+                    Err(_) => break,
+                }
+            }
+            (Ok(ret), text, loc_parse)
+        };
+        Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<Vec<O>>)
+    }    
     pub fn map<M, X>(self, m: M) -> Parser<impl Fn(I, Location) -> (Result<X, (String, Location)>, I, Location) + Copy, I, X>
     where
         M: Fn(O) -> X + Copy
@@ -46,6 +82,15 @@ where
         Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<X>)
     }
 }
+
+/*pub fn y_combinator<F1, F2, I, O>(f: &dyn Fn(Parser<F1, I, O>) -> Parser<F2, I, O>)
+    -> Parser<impl Fn(I, Location) -> (Result<O, (String, Location)>, I, Location) + Copy, I, O>
+where
+    F1: Fn(I, Location) -> (Result<O, (String, Location)>, I, Location) + Copy,
+    F2: Fn(I, Location) -> (Result<O, (String, Location)>, I, Location) + Copy,
+{
+    
+}*/
 
 impl<F1: Copy, F2: Copy, I: Copy, O1, O2> Mul<Parser<F2, I, O2>> for Parser<F1, I, O1>
 where

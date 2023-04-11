@@ -86,3 +86,33 @@ macro_rules! escaped_quoted {
         token_base!("\"") >> regex!(r#"([^"]*)"#) << token_base!("\"")
     };
 }
+
+#[macro_export]
+macro_rules! sep {
+    ($p: expr) => {
+        {
+            fn f(input: &str, loc: Location) -> (Option<&str>, Location) {
+                if let Some(o) = input.strip_prefix($p) {
+                    let loc_parse = loc.update($p);
+                    (Some(o), loc_parse.0)
+                } else {
+                    (
+                        None,
+                        loc
+                    )
+                }
+            }
+            f
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! tobox {
+    ($p: expr) => {
+        {
+            let f = |input, loc: Location| Box::new($p.0)(input, loc);
+            Parser::new(f)
+        }
+    };
+}
