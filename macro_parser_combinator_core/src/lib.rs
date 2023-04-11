@@ -116,3 +116,10 @@ macro_rules! tobox {
         }
     };
 }
+
+#[macro_export]
+macro_rules! Parser {
+    ($t: tt) => {
+        Parser<impl Fn(&'a str, Location) -> (Result<$t, (String, Location)>, &'a str, Location) + Copy, &'a str, $t>
+    };
+}

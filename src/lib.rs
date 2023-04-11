@@ -18,7 +18,7 @@ mod tests {
         Object(BTreeMap<String, Json>)
     }
 
-    fn lit_temp<'a>() -> Parser<impl Fn(&'a str, Location) -> (Result<Json, (String, Location)>, &'a str, Location) + Copy, &'a str, Json> {
+    fn lit_temp<'a>() -> Parser!(Json) {
         token!("null").map(|_| Json::Null)
             | (float!() << whitespace!()).map(Json::Number)
             | (escaped_quoted!() <<whitespace!()).map(Json::String)
@@ -26,26 +26,26 @@ mod tests {
             | token!("false").map(|_| Json::Bool(false))
     }
 
-    fn lit<'a>() -> Parser<impl Fn(&'a str, Location) -> (Result<Json, (String, Location)>, &'a str, Location) + Copy, &'a str, Json> {
+    fn lit<'a>() -> Parser!(Json) {
         whitespace!() >> lit_temp()
     }
 
-    fn array<'a>() -> Parser<impl Fn(&'a str, Location) -> (Result<Json, (String, Location)>, &'a str, Location) + Copy, &'a str, Json> {
+    fn array<'a>() -> Parser!(Json) {
         (whitespace!() >> token!("[")) >>
             tobox!(value()).many_sep(sep!(",")).map(Json::Array)//TODO: lit => value
             << (whitespace!() >> token!("]"))
     }
 
-    fn value<'a>() -> Parser<impl Fn(&'a str, Location) -> (Result<Json, (String, Location)>, &'a str, Location) + Copy, &'a str, Json> {
+    fn value<'a>() -> Parser!(Json) {
         lit() | array() | tobox!(obj())
     }
 
-    fn key_value<'a>() -> Parser<impl Fn(&'a str, Location) -> (Result<(String, Json), (String, Location)>, &'a str, Location) + Copy, &'a str, (String, Json)> {
+    fn key_value<'a>() -> Parser!((String, Json)) {
         whitespace!() >> ((escaped_quoted!() << whitespace!() << token!(":")) *
             value())
     }
 
-    fn obj<'a>() -> Parser<impl Fn(&'a str, Location) -> (Result<Json, (String, Location)>, &'a str, Location) + Copy, &'a str, Json> {
+    fn obj<'a>() -> Parser!(Json) {
         whitespace!() >> token!("{") >> (
             key_value().many_sep(sep!(",")).map(|x| Json::Object(x.into_iter().collect::<BTreeMap<String, Json>>()))
         ) << (whitespace!() >> token!("}"))
