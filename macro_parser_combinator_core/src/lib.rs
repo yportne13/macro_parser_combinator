@@ -65,7 +65,25 @@ macro_rules! whitespace {
         //    | token_base!("\r")
         //    | token_base!("\t")
         //).many()
-        regex!(r"\s*")
+        //regex!(r"\s*")
+        {
+            fn f(input: &str, loc: Location) -> (Result<&str, (String, Location)>, &str, Location) {
+                let mut a = input.chars();
+                let mut b = input.chars();
+                let mut loc = loc;
+                loop {
+                    match a.next() {
+                        Some(' ') => {b.next();loc.col += 1;},
+                        Some('\n') => {b.next();loc.col = 1;loc.line += 1;},
+                        Some('\r') => {b.next();loc.col = 1;loc.line += 1;},
+                        Some('\t') => {b.next();loc.col += 1;},
+                        _ => {break;}
+                    }
+                }
+                (Ok(""), b.as_str(), loc)
+            }
+            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        }
     };
 }
 
