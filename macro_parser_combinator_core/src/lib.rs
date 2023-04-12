@@ -1,12 +1,38 @@
 #![feature(type_alias_impl_trait)]
 
+extern crate lazy_static;
+
 pub mod location;
 pub mod parser;
 
 pub use regex::Regex;
+pub use lazy_static::lazy_static;
 
 pub use crate::location::Location;
 pub use crate::parser::Parser;
+
+#[macro_export]
+macro_rules! char {
+    ($p: expr) => {
+        {
+            fn f(input: &str, loc: Location) -> (Result<&str, (String, Location)>, &str, Location) {
+                if let Some(o) = input.strip_prefix($p) {
+                    let loc_parse = loc.update_char($p);
+                    (Ok(o), o, loc_parse.0)
+                } else {
+                    (
+                        Err((format!("should be char {} but get {}",
+                            $p,
+                            input.get(0..1).unwrap_or("")), loc)),
+                        input,
+                        loc
+                    )
+                }
+            }
+            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        }
+    };
+}
 
 #[macro_export]
 macro_rules! token_base {
@@ -32,9 +58,21 @@ macro_rules! token_base {
 }
 
 #[macro_export]
+macro_rules! whitespace {
+    () => {
+        //(token_base!(" ")
+        //    | token_base!("\n")
+        //    | token_base!("\r")
+        //    | token_base!("\t")
+        //).many()
+        regex!(r"\s*")
+    };
+}
+
+#[macro_export]
 macro_rules! token {
     ($p: expr) => {
-        token_base!($p) << (token_base!(" ").many())
+        token_base!($p) << whitespace!()
     };
 }
 
@@ -43,8 +81,11 @@ macro_rules! regex {
     ($p: expr) => {
         {
             fn f(input: &str, loc: Location) -> (Result<String, (String, Location)>, &str, Location) {
-                let re = Regex::new($p).unwrap();
-                let cap = re.find(input).map(|x| x.as_str());
+                //let re = Regex::new($p).unwrap();
+                lazy_static! {
+                    static ref RE: Regex = Regex::new($p).unwrap();
+                }
+                let cap = RE.find(input).map(|x| x.as_str());
                 let o = cap.and_then(|x| input.strip_prefix(x));
                 match o {
                     Some(output) => {
@@ -56,13 +97,6 @@ macro_rules! regex {
             }
             Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<String>)
         }
-    };
-}
-
-#[macro_export]
-macro_rules! whitespace {
-    () => {
-        regex!(r"\s*")
     };
 }
 
@@ -83,7 +117,7 @@ macro_rules! float {
 #[macro_export]
 macro_rules! escaped_quoted {
     () => {
-        token_base!("\"") >> regex!(r#"([^"]*)"#) << token_base!("\"")
+        token_base!("\"") >> regex!(r#"(?:\\"|[^"])*"#) << token_base!("\"")
     };
 }
 

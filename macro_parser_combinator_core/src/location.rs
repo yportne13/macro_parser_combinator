@@ -17,7 +17,7 @@ impl Location {
             .as_bytes()
             .iter()
             .fold((0,0), |(c, l),&i| {
-                if i == b'\n' {
+                if i == b'\n' {//TODO:\r?
                     (1, l+1)
                 }else {
                     (c+1, l)
@@ -25,6 +25,15 @@ impl Location {
             });
         (Location{line: self.line+line_inc, col: if line_inc == 0 {self.col+col_inc} else {col_inc}},
             Location{line: line_inc, col: col_inc})
+    }
+    pub fn update_char(self, input: char) -> (Self, Self) {
+        if input == '\n' {//TODO:\r?
+            (Location{line: self.line+1, col: 1},
+                Location{line: 1, col: 1})
+        }else {
+            (Location{line: self.line, col: self.col+1},
+                Location{line: 0, col: 1})
+        }
     }
 }
 
