@@ -1,28 +1,57 @@
 use macro_parser_combinator::*;
+use std::collections::HashMap;
 
-bnf!(lit_temp := "null" | "true" | "false");
-bnf!(lit := whitespace >> lit_temp);
-bnf!(array := [lit]);
+#[derive(Debug, PartialEq)]
+pub enum JsonValue {
+    Null,
+    String(String),
+    Number(f64),
+    Bool(bool),
+    Array(Vec<JsonValue>),
+    Object(HashMap<String, JsonValue>)
+}
 
-//bnf!(a := "ab" << "c");
-//bnf!(b := "de" << "f");
-bnf!(ztoa := r"[a-z]*");
+parser!(
+    lit_temp: JsonValue = (float << whitespace) -> (JsonValue::Number)
+        | (escaped_quoted << whitespace) -> (JsonValue::String)
+        | "null" -> (|_| JsonValue::Null)
+        | "true" -> (|_| JsonValue::Bool(true))
+        | "false" -> (|_| JsonValue::Bool(false))
+);
 
-//bnf!(abc := a * b);
-//bnf!(abc := "abc" * b);
+parser!(
+    lit: JsonValue = whitespace >> lit_temp
+);
+
+parser!(
+    array: JsonValue = (whitespace >> "[") >>
+        [value(",")] -> (JsonValue::Array) << "]"
+);
+
+parser!{
+    value: JsonValue = lit | array | obj
+}
+
+parser!{
+    key_value: (String, JsonValue) = whitespace >> (escaped_quoted << whitespace << ":") * value
+}
+
+parser!{
+    obj: JsonValue = whitespace >> "{" >>
+        [key_value(",")] -> (|x| JsonValue::Object(x.into_iter().collect::<HashMap<String, JsonValue>>()))
+        << "}"
+}
 
 fn main() {
-    //println!("{:?}", abc!().run("abcdef"));
-
-    println!("{:?}", lit!().run("null"));
-    println!("{:?}", lit!().run("true"));
-    println!("{:?}", lit!().run("false"));
-    println!("{:?}", array!().run("[false]"));
-    
-    
-    
-    println!("{:?}", ztoa!().run("json123abc"));
-
-    let parser = token!(r#"r""#) >> regex!(r#"[^"]*"#);
-    println!("{:?}", parser.run(r#"r"[a-z]*""#))
+    let input = r#"
+{
+  "Company name" : "Microsoft Corporation",
+  "Ticker"  : "MSFT",
+  "Active"  : true,
+  "Price"   : 30.66,
+  "Shares outstanding" : 8.38e9,
+  "Related companies" : [ "HPQ", "IBM", "YHOO", "DELL", "GOOG" ]
+}
+"#;
+    println!("{:?}", obj().run(input));
 }
