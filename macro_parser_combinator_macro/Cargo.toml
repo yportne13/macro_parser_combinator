@@ -9,5 +9,7 @@ edition = "2021"
 proc-macro = true
 
 [dependencies]
+syn = { version = "2.0", features = ["full"] }
+quote = "1.0"
 macro_parser_combinator_core = { path="../macro_parser_combinator_core" }
 regex = "1"

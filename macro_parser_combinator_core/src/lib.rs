@@ -87,6 +87,10 @@ macro_rules! whitespace {
     };
 }
 
+pub fn whitespace<'a>() -> Parser!() {
+    whitespace!()
+}
+
 #[macro_export]
 macro_rules! token {
     ($p: expr) => {
@@ -125,6 +129,10 @@ macro_rules! int {
     };
 }
 
+pub fn int<'a>() -> Parser!(i64) {
+    regex!(r"[-+]?[0-9]+").map(|x| x.parse::<i64>().unwrap())
+}
+
 #[macro_export]
 macro_rules! float {
     () => {
@@ -132,11 +140,19 @@ macro_rules! float {
     };
 }
 
+pub fn float<'a>() -> Parser!(f64) {
+    float!()
+}
+
 #[macro_export]
 macro_rules! escaped_quoted {
     () => {
         token_base!("\"") >> regex!(r#"(?:\\"|[^"])*"#) << token_base!("\"")
     };
+}
+
+pub fn escaped_quoted<'a>() -> Parser!(String) {
+    escaped_quoted!()
 }
 
 #[macro_export]
@@ -174,4 +190,7 @@ macro_rules! Parser {
     ($t: tt) => {
         Parser<impl Fn(&'a str, Location) -> (Result<$t, (String, Location)>, &'a str, Location) + Copy, &'a str, $t>
     };
+    () => {
+        Parser<impl Fn(&'a str, Location) -> (Result<&'a str, (String, Location)>, &'a str, Location) + Copy, &'a str, &'a str>
+    }
 }
