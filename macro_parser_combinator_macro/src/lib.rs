@@ -3,7 +3,7 @@
 
 extern crate proc_macro;
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{quote, ToTokens};
 use syn::{Ident, parse::Parse, parse_macro_input, Token, token::Eq, Type};
 
 mod term;
@@ -41,12 +41,46 @@ impl Parse for Parser {
     }
 }
 
+impl ToTokens for Parser {
+    fn to_tokens(&self, tokens: &mut quote::__private::TokenStream) {
+        let Parser { name, out_type, expr } = self;
+        tokens.extend(quote!(pub fn #name<'a>() -> Parser!(#out_type) {
+            #expr
+        }))
+    }
+}
+
+enum MultiParser {
+    Multi(Parser, Box<MultiParser>),
+    Single(Parser),
+}
+
+impl Parse for MultiParser {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let first: Parser = input.parse()?;
+        if input.is_empty() {
+            Ok(MultiParser::Single(first))
+        }else {
+            let second: MultiParser = input.parse()?;
+            Ok(MultiParser::Multi(first, Box::new(second)))
+        }
+    }
+}
+
+impl ToTokens for MultiParser {
+    fn to_tokens(&self, tokens: &mut quote::__private::TokenStream) {
+        tokens.extend(match self {
+            MultiParser::Multi(a, b) => quote!(#a
+#b),
+            MultiParser::Single(a) => quote!(#a),
+        })
+    }
+}
+
 #[proc_macro]
 pub fn parser(input: TokenStream) -> TokenStream {
-    let Parser { name, out_type, expr } = parse_macro_input!(input as Parser);
-    let ret = quote!(pub fn #name<'a>() -> Parser!(#out_type) {
-        #expr
-    });
+    let parser = parse_macro_input!(input as MultiParser);
+    let ret = quote!(#parser);
     ret.into()
 }
 

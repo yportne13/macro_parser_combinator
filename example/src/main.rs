@@ -11,32 +11,22 @@ pub enum JsonValue {
     Object(HashMap<String, JsonValue>)
 }
 
-parser!(
+parser!{
     lit_temp: JsonValue = (float << whitespace) -> (JsonValue::Number)
         | (escaped_quoted << whitespace) -> (JsonValue::String)
         | "null" -> (|_| JsonValue::Null)
         | "true" -> (|_| JsonValue::Bool(true))
         | "false" -> (|_| JsonValue::Bool(false))
-);
 
-parser!(
     lit: JsonValue = whitespace >> lit_temp
-);
 
-parser!(
     array: JsonValue = (whitespace >> "[") >>
         [value(",")] -> (JsonValue::Array) << "]"
-);
 
-parser!{
     value: JsonValue = lit | array | obj
-}
 
-parser!{
     key_value: (String, JsonValue) = whitespace >> (escaped_quoted << whitespace << ":") * value
-}
 
-parser!{
     obj: JsonValue = whitespace >> "{" >>
         [key_value(",")] -> (|x| JsonValue::Object(x.into_iter().collect::<HashMap<String, JsonValue>>()))
         << "}"
