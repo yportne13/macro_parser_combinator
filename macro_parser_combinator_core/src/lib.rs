@@ -15,15 +15,13 @@ pub use crate::parser::Parser;
 macro_rules! char {
     ($p: expr) => {
         {
-            fn f(input: &str, loc: Location) -> (Result<&str, (String, Location)>, &str, Location) {
+            fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
                 if let Some(o) = input.strip_prefix($p) {
                     let loc_parse = loc.update_char($p);
-                    (Ok(o), o, loc_parse.0)
+                    (Some(o), o, loc_parse.0)
                 } else {
                     (
-                        Err((format!("should be char {} but get {}",
-                            $p,
-                            input.get(0..1).unwrap_or("")), loc)),
+                        None,
                         input,
                         loc
                     )
@@ -38,15 +36,13 @@ macro_rules! char {
 macro_rules! token_base {
     ($p: expr) => {
         {
-            fn f(input: &str, loc: Location) -> (Result<&str, (String, Location)>, &str, Location) {
+            fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
                 if let Some(o) = input.strip_prefix($p) {
                     let loc_parse = loc.update($p);
-                    (Ok($p), o, loc_parse.0)
+                    (Some($p), o, loc_parse.0)
                 } else {
                     (
-                        Err((format!("should be token {} but get {}",
-                            $p,
-                            input.get(0..($p.len())).unwrap_or("")), loc)),
+                        None,
                         input,
                         loc
                     )
@@ -58,32 +54,58 @@ macro_rules! token_base {
 }
 
 #[macro_export]
+macro_rules! token_throw {
+    ($p: expr) => {
+        {
+            fn f(input: &str, loc: Location) -> (Option<()>, &str, Location) {
+                if let Some(o) = input.strip_prefix($p) {
+                    let loc_parse = loc.update($p);
+                    (Some(()), o, loc_parse.0)
+                } else {
+                    (
+                        None,
+                        input,
+                        loc
+                    )
+                }
+            }
+            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! whitespace {
     () => {
-        //(token_base!(" ")
-        //    | token_base!("\n")
-        //    | token_base!("\r")
-        //    | token_base!("\t")
-        //).many()
+        (token_base!(" ").map(|_| ())
+            | token_base!("\n").map(|_| ())
+            | token_base!("\r").map(|_| ())
+            | token_base!("\t").map(|_| ())
+        ).many().map(|_| "")
+        //(token_throw!(" ")
+        //    | token_throw!("\n")
+        //    | token_throw!("\r")
+        //    | token_throw!("\t")
+        //).many().map(|_| "")
         //regex!(r"\s*")
-        {
-            fn f(input: &str, loc: Location) -> (Result<&str, (String, Location)>, &str, Location) {
-                let mut a = input.chars();
-                let mut b = input.chars();
-                let mut loc = loc;
-                loop {
-                    match a.next() {
-                        Some(' ') => {b.next();loc.col += 1;},
-                        Some('\n') => {b.next();loc.col = 1;loc.line += 1;},
-                        Some('\r') => {b.next();loc.col = 1;loc.line += 1;},
-                        Some('\t') => {b.next();loc.col += 1;},
-                        _ => {break;}
-                    }
-                }
-                (Ok(""), b.as_str(), loc)
-            }
-            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
-        }
+        //{
+        //    fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
+        //        let mut a = input.chars();
+        //        let mut b = input.chars();
+        //        let mut loc = loc;
+        //        loop {
+        //            match a.next() {
+        //                Some(' ') => {b.next();loc.col += 1;},
+        //                Some('\n') => {b.next();loc.col = 1;loc.line += 1;},
+        //                Some('\r') => {b.next();loc.col = 1;loc.line += 1;},
+        //                Some('\t') => {b.next();loc.col += 1;},
+        //                _ => {break;}
+        //            }
+        //        }
+        //        (Some(""), b.as_str(), loc)
+        //    }
+        //    Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        //}
     };
 }
 
@@ -102,7 +124,7 @@ macro_rules! token {
 macro_rules! regex {
     ($p: expr) => {
         {
-            fn f(input: &str, loc: Location) -> (Result<String, (String, Location)>, &str, Location) {
+            fn f(input: &str, loc: Location) -> (Option<String>, &str, Location) {
                 //let re = Regex::new($p).unwrap();
                 lazy_static! {
                     static ref RE: Regex = Regex::new($p).unwrap();
@@ -112,9 +134,9 @@ macro_rules! regex {
                 match o {
                     Some(output) => {
                         let loc_parse = loc.update(cap.unwrap());
-                        (cap.map(|x| x.to_string()).ok_or(("regex error".to_string(), loc_parse.0)), output, loc_parse.0)
+                        (cap.map(|x| x.to_string()), output, loc_parse.0)
                     },
-                    None => (Err((format!("should be regex {}", $p), loc)), input, loc)
+                    None => (None, input, loc)
                 }
             }
             Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<String>)
@@ -188,9 +210,9 @@ macro_rules! tobox {
 #[macro_export]
 macro_rules! Parser {
     ($t: tt) => {
-        Parser<impl Fn(&'a str, Location) -> (Result<$t, (String, Location)>, &'a str, Location) + Copy, &'a str, $t>
+        Parser<impl Fn(&'a str, Location) -> (Option<$t>, &'a str, Location) + Copy, &'a str, $t>
     };
     () => {
-        Parser<impl Fn(&'a str, Location) -> (Result<&'a str, (String, Location)>, &'a str, Location) + Copy, &'a str, &'a str>
+        Parser<impl Fn(&'a str, Location) -> (Option<&'a str>, &'a str, Location) + Copy, &'a str, &'a str>
     }
 }
