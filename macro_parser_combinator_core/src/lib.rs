@@ -54,6 +54,27 @@ macro_rules! token_base {
 }
 
 #[macro_export]
+macro_rules! split_token {
+    ($p: expr) => {
+        {
+            fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
+                if let Some(o) = input.split_once($p) {
+                    let loc_parse = loc.update($p);
+                    (Some(o.0), o.1, loc_parse.0)
+                } else {
+                    (
+                        None,
+                        input,
+                        loc
+                    )
+                }
+            }
+            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        }
+    };
+}
+
+#[macro_export]
 macro_rules! token_throw {
     ($p: expr) => {
         {
@@ -77,35 +98,35 @@ macro_rules! token_throw {
 #[macro_export]
 macro_rules! whitespace {
     () => {
-        (token_base!(" ").map(|_| ())
-            | token_base!("\n").map(|_| ())
-            | token_base!("\r").map(|_| ())
-            | token_base!("\t").map(|_| ())
-        ).many().map(|_| "")
+        //(token_base!(" ").map(|_| ())
+        //    | token_base!("\n").map(|_| ())
+        //    | token_base!("\r").map(|_| ())
+        //    | token_base!("\t").map(|_| ())
+        //).many().map(|_| "")
         //(token_throw!(" ")
         //    | token_throw!("\n")
         //    | token_throw!("\r")
         //    | token_throw!("\t")
         //).many().map(|_| "")
-        //regex!(r"\s*")
-        //{
-        //    fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
-        //        let mut a = input.chars();
-        //        let mut b = input.chars();
-        //        let mut loc = loc;
-        //        loop {
-        //            match a.next() {
-        //                Some(' ') => {b.next();loc.col += 1;},
-        //                Some('\n') => {b.next();loc.col = 1;loc.line += 1;},
-        //                Some('\r') => {b.next();loc.col = 1;loc.line += 1;},
-        //                Some('\t') => {b.next();loc.col += 1;},
-        //                _ => {break;}
-        //            }
-        //        }
-        //        (Some(""), b.as_str(), loc)
-        //    }
-        //    Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
-        //}
+        //regex!(r"\s*").map(|_| "")
+        {
+            fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
+                let mut a = input.chars();
+                let mut b = input.chars();
+                let mut loc = loc;
+                loop {
+                    match a.next() {
+                        Some(' ') => {b.next();loc.col += 1;},
+                        Some('\n') => {b.next();loc.col = 1;loc.line += 1;},
+                        Some('\r') => {b.next();loc.col = 1;loc.line += 1;},
+                        Some('\t') => {b.next();loc.col += 1;},
+                        _ => {break;}
+                    }
+                }
+                (Some(""), b.as_str(), loc)
+            }
+            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        }
     };
 }
 
@@ -169,7 +190,8 @@ pub fn float<'a>() -> Parser!(f64) {
 #[macro_export]
 macro_rules! escaped_quoted {
     () => {
-        token_base!("\"") >> regex!(r#"(?:\\"|[^"])*"#) << token_base!("\"")
+        //token_base!("\"") >> regex!(r#"(?:\\"|[^"])*"#) << token_base!("\"")
+        token_base!("\"") >> split_token!("\"").map(|s| s.to_string())
     };
 }
 
