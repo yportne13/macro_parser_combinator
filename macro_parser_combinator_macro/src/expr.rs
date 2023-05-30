@@ -1,13 +1,15 @@
 use quote::{ToTokens, quote};
-use syn::{parse::Parse, Token, parenthesized};
+use syn::{parse::Parse, Token, parenthesized, token::Eq};
 
 use crate::term::Term;
 
 /// first level of expr
 /// 1. term -> (closure)
-/// 2. term
+/// 2. term => (closure)
+/// 3. term
 pub enum Expr1 {
     Map(Term, syn::Expr),
+    Flatmap(Term, syn::Expr),
     Term(Term),
 }
 
@@ -19,6 +21,12 @@ impl Parse for Expr1 {
             let _ = parenthesized!(content in input);
             let expr = content.parse::<syn::Expr>()?;
             Ok(Expr1::Map(term, expr))
+        } else if let Ok(_) = input.parse::<Eq>() {
+            input.parse::<Token![>]>()?;
+            let content;
+            let _ = parenthesized!(content in input);
+            let expr = content.parse::<syn::Expr>()?;
+            Ok(Expr1::Flatmap(term, expr))
         }else {
             Ok(Expr1::Term(term))
         }
@@ -30,7 +38,10 @@ impl ToTokens for Expr1 {
         tokens.extend(match self {
             Expr1::Map(t, e) => {
                 quote!((#t).map(#e))
-            }
+            },
+            Expr1::Flatmap(t, e) => {
+                quote!((#t).and_then(#e))
+            },
             Expr1::Term(t) => quote!(#t),
         });
     }
