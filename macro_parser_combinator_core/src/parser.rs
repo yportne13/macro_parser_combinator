@@ -18,6 +18,13 @@ where
     pub fn run(&self, input: I) -> Option<O> {
         self.run_with_out(input, Location::new()).0
     }
+    pub fn to_try(self) -> Parser<impl Fn(I, Location) -> (Option<Option<O>>, I, Location) + Copy, I, Option<O>> {
+        let f = move |input: I, loc: Location| {
+            let (ret, ret_input, ret_loc) = self.0(input, loc);
+            (Some(ret), ret_input, ret_loc)
+        };
+        Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<Option<O>>)
+    }
     pub fn many(self) -> Parser<impl Fn(I, Location) -> (Option<Vec<O>>, I, Location) + Copy, I, Vec<O>> {
         let f = move |input: I, loc: Location| {
             let mut ret = Vec::new();
@@ -80,6 +87,17 @@ where
             (ret.map(m), ret_input, ret_loc)
         };
         Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<X>)
+    }
+    pub fn and_then<M, X>(self, m: M) -> Parser<impl Fn(I, Location) -> (Option<X>, I, Location) + Copy, I, X>
+    where
+        M: Fn(O) -> Option<X> + Copy
+    {
+        let f = move |input: I, loc: Location| {
+            let (ret, ret_input, ret_loc) = self.0(input, loc);
+            (ret.and_then(m), ret_input, ret_loc)
+        };
+        Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<X>)
+ 
     }
 }
 

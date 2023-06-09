@@ -1,14 +1,23 @@
 
 use quote::{quote, ToTokens};
-use syn::{Ident, parse::Parse, LitStr, parenthesized, bracketed};
+use syn::{Ident, parse::Parse, LitStr, parenthesized, bracketed, braced};
 
 use crate::expr::Expr;
 
+/// term
+/// 1.function: whitespace
+/// 2.regex: r"[a-z]*"
+/// 3.token: "assign"
+/// 4.paren: (a >> b)
+/// 5.try: [a]
+/// 6.many: {a}
+/// 7.many with sep: {a(",")}
 pub enum Term {
     Func(Ident),
     Regex(LitStr),
     Token(LitStr),
     Paren(Box<Expr>),
+    Try(Box<Expr>),
     Many(Box<Expr>),
     ManySep(Box<Expr>, LitStr),
 }
@@ -17,6 +26,8 @@ impl Parse for Term {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         if let Ok(t) = input.parse::<TermParen>() {
             Ok(Term::Paren(Box::new(t.expr)))
+        } else if let Ok(t) = input.parse::<TermTry>() {
+            Ok(Term::Try(Box::new(t.expr)))
         } else if let Ok(t) = input.parse::<TermMany>() {
             match t {
                 TermMany::Many(e) => Ok(Term::Many(Box::new(e))),
@@ -66,6 +77,9 @@ impl ToTokens for Term {
             Term::Paren(expr) => {
                 quote!((#expr))
             },
+            Term::Try(expr) => {
+                quote!((#expr).to_try())
+            },
             Term::Many(expr) => {
                 quote!((#expr).many())
             },
@@ -86,6 +100,19 @@ impl Parse for TermParen {
         let _ = parenthesized!(content in input);
         let expr: Expr = content.parse()?;
         Ok(TermParen { expr })
+    }
+}
+
+struct TermTry {
+    expr: Expr
+}
+
+impl Parse for TermTry {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let content;
+        let _ = bracketed!(content in input);
+        let expr: Expr = content.parse()?;
+        Ok(TermTry { expr })
     }
 }
 
@@ -110,8 +137,8 @@ enum TermMany {
 impl Parse for TermMany {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let content;
-        let _ = bracketed!(content in input);
-        let expr: Expr = content.parse()?;//TODO:ManySep
+        let _ = braced!(content in input);
+        let expr: Expr = content.parse()?;
         if let Ok(sep) = content.parse::<Sep>() {
             Ok(TermMany::ManySep(expr, sep.sep))
         }else {
