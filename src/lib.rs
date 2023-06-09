@@ -65,10 +65,10 @@ mod tests {
 }
 "#;
         let obj = obj();
-        let ret = obj.run_with_out(input, Location::new());
+        let ret = obj.run_with_out(input);
         println!("mem size: {}", std::mem::size_of_val(&obj));
 
-        let x = r#"Ok(Object({"Active": Bool(true), "Company name": String("Microsoft Corporation"), "Price": Number(30.66), "Related companies": Array([String("HPQ"), String("IBM"), String("YHOO"), String("DELL"), String("GOOG")]), "Shares outstanding": Number(8380000000.0), "Ticker": String("MSFT")}))"#;
+        let x = r#"Some(Object({"Active": Bool(true), "Company name": String("Microsoft Corporation"), "Price": Number(30.66), "Related companies": Array([String("HPQ"), String("IBM"), String("YHOO"), String("DELL"), String("GOOG")]), "Shares outstanding": Number(8380000000.0), "Ticker": String("MSFT")}))"#;
         println!("{:?}", ret.0);
         let ret_str = format!("{:?}", ret.0);
         if ret_str.eq(x) {
