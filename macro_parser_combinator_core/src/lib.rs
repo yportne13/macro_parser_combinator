@@ -11,6 +11,13 @@ pub use lazy_static::lazy_static;
 pub use crate::location::Location;
 pub use crate::parser::Parser;
 
+pub struct Span<T> {
+    pub data: T,
+    pub offset: usize,
+    pub line: usize,
+    pub len: usize,
+}
+
 #[macro_export]
 macro_rules! char {
     ($p: expr) => {
@@ -98,17 +105,6 @@ macro_rules! token_throw {
 #[macro_export]
 macro_rules! whitespace {
     () => {
-        //(token_base!(" ").map(|_| ())
-        //    | token_base!("\n").map(|_| ())
-        //    | token_base!("\r").map(|_| ())
-        //    | token_base!("\t").map(|_| ())
-        //).many().map(|_| "")
-        //(token_throw!(" ")
-        //    | token_throw!("\n")
-        //    | token_throw!("\r")
-        //    | token_throw!("\t")
-        //).many().map(|_| "")
-        //regex!(r"\s*").map(|_| "")
         {
             fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
                 let mut a = input.chars();
@@ -190,7 +186,6 @@ pub fn float<'a>() -> Parser!(f64) {
 #[macro_export]
 macro_rules! escaped_quoted {
     () => {
-        //token_base!("\"") >> regex!(r#"(?:\\"|[^"])*"#) << token_base!("\"")
         token_base!("\"") >> split_token!("\"").map(|s| s.to_string())
     };
 }
