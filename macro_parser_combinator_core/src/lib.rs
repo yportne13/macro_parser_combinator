@@ -11,11 +11,13 @@ pub use lazy_static::lazy_static;
 pub use crate::location::Location;
 pub use crate::parser::Parser;
 
+#[derive(Debug, Clone)]
 pub struct Span<T> {
     pub data: T,
     pub offset: usize,
     pub line: usize,
     pub len: usize,
+    pub path: Option<std::path::PathBuf>,
 }
 
 #[macro_export]
@@ -226,7 +228,7 @@ macro_rules! tobox {
 
 #[macro_export]
 macro_rules! Parser {
-    ($t: tt) => {
+    ($t: ty) => {
         Parser<impl Fn(&'a str, Location) -> (Option<$t>, &'a str, Location) + Copy, &'a str, $t>
     };
     () => {

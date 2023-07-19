@@ -45,6 +45,30 @@ where
         };
         Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<Vec<O>>)
     }
+    pub fn many1(self) -> Parser<impl Fn(I, Location) -> (Option<Vec<O>>, I, Location) + Copy, I, Vec<O>> {
+        let f = move |input: I, loc: Location| {
+            let mut ret = Vec::new();
+            let mut text = input;
+            let mut loc_parse = loc;
+            loop {
+                let parse = self.0(text, loc_parse);
+                match parse.0 {
+                    Some(item) => {
+                        ret.push(item);
+                        text = parse.1;
+                        loc_parse = parse.2;
+                    },
+                    None => break,
+                }
+            }
+            if ret.is_empty() {
+                (None, input, loc)
+            }else {
+                (Some(ret), text, loc_parse)
+            }
+        };
+        Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<Vec<O>>)
+    }
     pub fn many_sep<Fs>(self, sep: Fs) -> Parser<impl Fn(I, Location) -> (Option<Vec<O>>, I, Location) + Copy, I, Vec<O>>
     where
         Fs: Fn(I, Location) -> (Option<I>, Location) + Copy
@@ -78,6 +102,43 @@ where
         };
         Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<Vec<O>>)
     }    
+    pub fn many_sep1<Fs>(self, sep: Fs) -> Parser<impl Fn(I, Location) -> (Option<Vec<O>>, I, Location) + Copy, I, Vec<O>>
+    where
+        Fs: Fn(I, Location) -> (Option<I>, Location) + Copy
+    {
+        let f = move |input: I, loc: Location| {
+            let mut ret = Vec::new();
+            let mut text = input;
+            let mut loc_parse = loc;
+            loop {
+                let parse = self.0(text, loc_parse);
+                match parse.0 {
+                    Some(item) => {
+                        ret.push(item);
+                        let jump_sep = sep(parse.1, parse.2);
+                        match jump_sep.0 {
+                            Some(t) => {
+                                text = t;
+                                loc_parse = jump_sep.1;
+                            },
+                            None => {
+                                text = parse.1;
+                                loc_parse = parse.2;
+                                break
+                            },
+                        }
+                    },
+                    None => break,
+                }
+            }
+            if ret.is_empty() {
+                (None, input, loc)
+            }else {
+                (Some(ret), text, loc_parse)
+            }
+        };
+        Parser(f, std::marker::PhantomData::<I>, std::marker::PhantomData::<Vec<O>>)
+    }
     pub fn map<M, X>(self, m: M) -> Parser<impl Fn(I, Location) -> (Option<X>, I, Location) + Copy, I, X>
     where
         M: Fn(O) -> X + Copy

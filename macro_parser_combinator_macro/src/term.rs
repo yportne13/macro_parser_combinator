@@ -1,6 +1,6 @@
 
 use quote::{quote, ToTokens};
-use syn::{Ident, parse::Parse, LitStr, parenthesized, bracketed, braced};
+use syn::{Ident, parse::Parse, LitStr, parenthesized, bracketed, braced, Token};
 
 use crate::expr::Expr;
 
@@ -11,7 +11,9 @@ use crate::expr::Expr;
 /// 4.paren: (a >> b)
 /// 5.try: [a]
 /// 6.many: {a}
-/// 7.many with sep: {a(",")}
+/// 7.many1: {a+}
+/// 8.many with sep: {a(",")}
+/// 9.many with sep1: {a(",")+}
 pub enum Term {
     Func(Ident),
     Regex(LitStr),
@@ -19,7 +21,9 @@ pub enum Term {
     Paren(Box<Expr>),
     Try(Box<Expr>),
     Many(Box<Expr>),
+    Many1(Box<Expr>),
     ManySep(Box<Expr>, LitStr),
+    ManySep1(Box<Expr>, LitStr),
 }
 
 impl Parse for Term {
@@ -31,9 +35,10 @@ impl Parse for Term {
         } else if let Ok(t) = input.parse::<TermMany>() {
             match t {
                 TermMany::Many(e) => Ok(Term::Many(Box::new(e))),
+                TermMany::Many1(e) => Ok(Term::Many1(Box::new(e))),
                 TermMany::ManySep(e, s) => Ok(Term::ManySep(Box::new(e), s)),
+                TermMany::ManySep1(e, s) => Ok(Term::ManySep1(Box::new(e), s)),
             }
-            
         } else {
             input.clone().step(|cursor| {
                 if let Some((lit, rest)) = cursor.literal() {
@@ -83,9 +88,15 @@ impl ToTokens for Term {
             Term::Many(expr) => {
                 quote!((#expr).many())
             },
+            Term::Many1(expr) => {
+                quote!((#expr).many1())
+            },
             Term::ManySep(expr, sep) => {
                 quote!((#expr).many_sep(sep!(#sep)))
-            }
+            },
+            Term::ManySep1(expr, sep) => {
+                quote!((#expr).many_sep1(sep!(#sep)))
+            },
         });
     }
 }
@@ -131,7 +142,9 @@ impl Parse for Sep {
 
 enum TermMany {
     Many(Expr),
+    Many1(Expr),
     ManySep(Expr, LitStr),
+    ManySep1(Expr, LitStr),
 }
 
 impl Parse for TermMany {
@@ -140,9 +153,17 @@ impl Parse for TermMany {
         let _ = braced!(content in input);
         let expr: Expr = content.parse()?;
         if let Ok(sep) = content.parse::<Sep>() {
-            Ok(TermMany::ManySep(expr, sep.sep))
+            if let Ok(_) = content.parse::<Token![+]>() {
+                Ok(TermMany::ManySep1(expr, sep.sep))
+            }else {
+                Ok(TermMany::ManySep(expr, sep.sep))
+            }
         }else {
-            Ok(TermMany::Many(expr))
+            if let Ok(_) = content.parse::<Token![+]>() {
+                Ok(TermMany::Many1(expr))
+            }else {
+                Ok(TermMany::Many(expr))
+            }
         }
     }
 }
