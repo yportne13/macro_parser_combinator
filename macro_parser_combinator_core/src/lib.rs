@@ -108,27 +108,24 @@ macro_rules! token_throw {
 macro_rules! whitespace {
     () => {
         {
-            fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
-                let mut a = input.chars();
-                let mut b = input.chars();
+            fn f(input: &str, loc: Location) -> (Option<()>, &str, Location) {
+                let mut idx = 0;
                 let mut loc = loc;
                 loop {
-                    match a.next() {
-                        Some(' ') => {b.next();loc.col += 1;},
-                        Some('\n') => {b.next();loc.col = 1;loc.line += 1;},
-                        Some('\r') => {b.next();loc.col = 1;loc.line += 1;},
-                        Some('\t') => {b.next();loc.col += 1;},
+                    match input.bytes().nth(idx) {
+                        Some(b' ') | Some(b'\t') => {idx += 1;loc.col += 1;loc.offset += 1;}
+                        Some(b'\n') | Some(b'\r') => {idx += 1;loc.col += 1;loc.offset += 1;loc.line += 1;}
                         _ => {break;}
                     }
                 }
-                (Some(""), b.as_str(), loc)
+                (Some(()), unsafe{input.get_unchecked(idx..)}, loc)
             }
-            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
         }
     };
 }
 
-pub fn whitespace<'a>() -> Parser!() {
+pub fn whitespace<'a>() -> Parser!(()) {
     whitespace!()
 }
 
