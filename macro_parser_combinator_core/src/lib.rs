@@ -200,7 +200,16 @@ macro_rules! sep {
             fn f(input: &str, loc: Location) -> (Option<&str>, Location) {
                 if let Some(o) = input.strip_prefix($p) {
                     let loc_parse = loc.update($p);
-                    (Some(o), loc_parse.0)
+                    let mut idx = 0;
+                    let mut loc = loc_parse.0;
+                    loop {
+                        match o.bytes().nth(idx) {
+                            Some(b' ') | Some(b'\t') => {idx += 1;loc.col += 1;loc.offset += 1;}
+                            Some(b'\n') | Some(b'\r') => {idx += 1;loc.col += 1;loc.offset += 1;loc.line += 1;}
+                            _ => {break;}
+                        }
+                    }
+                    (Some(unsafe{o.get_unchecked(idx..)}), loc_parse.0)
                 } else {
                     (
                         None,
