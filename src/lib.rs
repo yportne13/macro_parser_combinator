@@ -3,6 +3,21 @@ pub use macro_parser_combinator_core::*;
 pub use macro_parser_combinator_macro::*;
 pub use regex::Regex;
 
+#[cfg(feature = "userange")]
+type Line = usize;
+#[cfg(feature = "userange")]
+type Col = usize;
+
+#[derive(Debug, Clone)]
+pub struct Span<T> {
+    pub data: T,
+    pub offset: usize,
+    pub len: usize,
+    #[cfg(feature = "userange")]
+    pub range: ((Line, Col), (Line, Col)),
+    pub path: Option<std::path::PathBuf>,
+}
+
 #[cfg(test)]
 mod tests {
     use std::collections::BTreeMap;

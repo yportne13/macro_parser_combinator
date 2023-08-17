@@ -11,3 +11,7 @@ macro_parser_combinator_macro = { path="macro_parser_combinator_macro" }
 # quote = "1"
 # syn = { version = "1.0.56", features = ["full"] }
 regex = "1"
+
+[features]
+default = ["userange"]
+userange = []
