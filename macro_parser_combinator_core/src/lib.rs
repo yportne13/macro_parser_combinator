@@ -181,9 +181,9 @@ macro_rules! escaped_quoted {
     };
 }
 
-pub fn escaped_quoted<'a>() -> Parser!(String) {
+/*pub fn escaped_quoted<'a>() -> Parser!(String) {
     escaped_quoted!()
-}
+}*/
 
 #[macro_export]
 macro_rules! sep {
