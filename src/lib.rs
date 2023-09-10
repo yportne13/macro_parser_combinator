@@ -35,8 +35,8 @@ mod tests {
 
     fn lit_temp<'a>() -> Parser!(Json) {
         token!("null").map(|_| Json::Null)
-            | (float!() << whitespace!()).map(Json::Number)
-            | (escaped_quoted!() <<whitespace!()).map(Json::String)
+            | (float() << whitespace!()).map(Json::Number)
+            | (escaped_quoted() <<whitespace!()).map(Json::String)
             | token!("true").map(|_| Json::Bool(true))
             | token!("false").map(|_| Json::Bool(false))
     }
@@ -47,7 +47,7 @@ mod tests {
 
     fn array<'a>() -> Parser!(Json) {
         (whitespace!() >> token!("[")) >>
-            tobox!(value()).many_sep(sep!(",")).map(Json::Array)//TODO: lit => value
+            tobox!(value()).many_sep(token!(",")).map(Json::Array)//TODO: lit => value
             << (whitespace!() >> token!("]"))
     }
 
@@ -56,13 +56,13 @@ mod tests {
     }
 
     fn key_value<'a>() -> Parser!((String, Json)) {
-        whitespace!() >> ((escaped_quoted!() << whitespace!() << token!(":")) *
+        whitespace!() >> ((escaped_quoted() << whitespace!() << token!(":")) *
             value())
     }
 
     fn obj<'a>() -> Parser!(Json) {
         whitespace!() >> token!("{") >> (
-            key_value().many_sep(sep!(",")).map(|x| Json::Object(x.into_iter().collect::<BTreeMap<String, Json>>()))
+            key_value().many_sep(token!(",")).map(|x| Json::Object(x.into_iter().collect::<BTreeMap<String, Json>>()))
         ) << (whitespace!() >> token!("}"))
     }
 
@@ -80,7 +80,7 @@ mod tests {
 }
 "#;
         let obj = obj();
-        let ret = obj.run_with_out(input, Location::new());
+        let ret = obj.run_with_out(input);
         println!("mem size: {}", std::mem::size_of_val(&obj));
 
         let x = r#"Ok(Object({"Active": Bool(true), "Company name": String("Microsoft Corporation"), "Price": Number(30.66), "Related companies": Array([String("HPQ"), String("IBM"), String("YHOO"), String("DELL"), String("GOOG")]), "Shares outstanding": Number(8380000000.0), "Ticker": String("MSFT")}))"#;

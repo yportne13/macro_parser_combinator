@@ -1,17 +1,20 @@
-#![feature(type_alias_impl_trait)]
+//#![feature(type_alias_impl_trait)]
 #![feature(impl_trait_in_assoc_type)]
 
 extern crate lazy_static;
 
 pub mod location;
-pub mod parser;
+//pub mod parser;
+pub mod parser2;
 
 pub use regex::Regex;
 pub use lazy_static::lazy_static;
 
 pub use crate::location::Location;
-pub use crate::parser::Parser;
+//pub use crate::parser::Parser;
+pub use crate::parser2::Parser;
 
+/*
 #[macro_export]
 macro_rules! char {
     ($p: expr) => {
@@ -232,4 +235,250 @@ macro_rules! Parser {
     () => {
         Parser<impl Fn(&'a str, Location) -> (Option<&'a str>, &'a str, Location) + Copy, &'a str, &'a str>
     }
+}
+*/
+
+#[macro_export]
+macro_rules! char {
+    ($p: expr) => {
+        {
+            fn f(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
+                if let Some(o) = input.strip_prefix($p) {
+                    let loc_parse = loc.update_char($p);
+                    (Some(o), o, loc_parse.0)
+                } else {
+                    (
+                        None,
+                        input,
+                        loc
+                    )
+                }
+            }
+            Parser(f, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! token_base {
+    ($p: expr) => {
+        {
+            fn fc(c: char) -> bool {
+                $p.bytes().next().unwrap() == c as u8
+            }
+            fn f(input: &str) -> (Option<&str>, &str) {
+                if let Some(o) = input.strip_prefix($p) {
+                    (Some($p), o)
+                } else {
+                    (
+                        None,
+                        input,
+                    )
+                }
+            }
+            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! token_throw {
+    ($p: expr) => {
+        {
+            fn fc(c: char) -> bool {
+                $p.bytes().next().unwrap() == c as u8
+            }
+            fn f(input: &str) -> (Option<()>, &str) {
+                if let Some(o) = input.strip_prefix($p) {
+                    (Some(()), o)
+                } else {
+                    (
+                        None,
+                        input,
+                    )
+                }
+            }
+            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! split_token {
+    ($p: expr) => {
+        {
+            fn fc(_: char) -> bool {
+                true
+            }
+            fn f(input: &str) -> (Option<&str>, &str) {
+                if let Some(o) = input.split_once($p) {
+                    (Some(o.0), o.1)
+                } else {
+                    (
+                        None,
+                        input,
+                    )
+                }
+            }
+            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! whitespace {
+    () => {
+        {
+            fn fc(_: char) -> bool {
+                true
+            }
+            fn f(input: &str) -> (Option<()>, &str) {
+                let mut idx = 0;
+                loop {
+                    match input.bytes().nth(idx) {
+                        Some(b' ') | Some(b'\t') => {idx += 1;}
+                        Some(b'\n') | Some(b'\r') => {idx += 1;}
+                        _ => {break;}
+                    }
+                }
+                (Some(()), unsafe{input.get_unchecked(idx..)})
+            }
+            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
+        }
+    };
+}
+
+pub fn whitespace<'a>() -> Parser!(()) {
+    whitespace!()
+}
+
+#[macro_export]
+macro_rules! token {
+    ($p: expr) => {
+        token_base!($p) << whitespace!()
+    };
+}
+
+#[macro_export]
+macro_rules! sep {
+    ($p: expr) => {
+        token_throw!($p) << whitespace!()
+    };
+}
+
+/*#[macro_export]
+macro_rules! escaped_quoted {
+    () => {
+        //token_base!("\"").right(split_token!("\"").map(|s| s.to_string()))
+        token_base!("\"") >> (split_token!("\"").map(|s| s.to_string()))
+    };
+}*/
+
+pub fn escaped_quoted<'a>() -> Parser!(String) {
+    //escaped_quoted!().map(|s| s.to_owned())
+    token_base!("\"").right(split_token!("\"").map(|s| s.to_string()))
+}
+
+#[macro_export]
+macro_rules! or_parser {
+    ($t: ty, $($x: expr),*) => {{
+        fn fcor(c: char) -> bool {
+            $($x.0(c)||)* true
+        }
+        fn fp(i: &str) -> (Option<$t>, &str) {
+            let first = i.bytes().next().unwrap() as char;
+            $(
+                if $x.0(first) {
+                    let ret = $x.1(i);
+                    if ret.0.is_some() {
+                        return ret;
+                    }
+                }
+            )*
+            (None, i)
+        }
+        Parser::new(fcor, fp)
+    }};
+}
+
+#[macro_export]
+macro_rules! tobox {
+    ($p: expr) => {
+        {
+            let fc = |c| Box::new($p.0)(c);
+            let f = |input| Box::new($p.1)(input);
+            Parser::new(fc, f)
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! Parser {
+    ($t: ty) => {
+        Parser<impl Fn(char) -> bool + Copy + 'a, impl Fn(&'a str) -> (Option<$t>, &'a str) + Copy, char, &'a str, $t>
+    };
+    () => {
+        Parser<impl Fn(char) -> bool + Copy, impl Fn(&'a str) -> (Option<&'a str>, &'a str) + Copy, char, &'a str, &'a str>
+    }
+}
+
+/// float parser
+pub fn float<'a>() -> Parser!(f64) {
+    or_parser!(f64,
+        my_float_inner(),
+        (token_base!("nan").map(|_| f64::NAN)),
+        (token_base!("inf").map(|_| f64::INFINITY)),
+        (token_base!("infinity").map(|_| f64::INFINITY))
+    )
+}
+
+fn my_float_inner<'a>() -> Parser!(f64) {
+    fn fp(i: &str) -> (Option<f64>, &str) {
+        let x = float_inner().1(i);
+        match x.0 {
+            Some(_) => (Some({
+                let index = x.1.as_ptr() as usize - i.as_ptr() as usize;
+                let s = unsafe{i.get_unchecked(..index)}.parse::<f64>().unwrap();
+                s
+            }), x.1),
+            None => (None, i)
+        }
+    }
+    Parser::new(
+        |c: char| c == '+' || c == '-' || c == '.' || c.is_ascii_digit(),
+        fp
+    )
+}
+
+fn float_inner<'a>() -> Parser!(()) {
+    ((token_base!("+") | token_base!("-")).to_try() * (
+        (digit1() * (token_base!(".") * digit1().to_try()).to_try()).map(|_| ())
+        | (token_base!(".") * digit1()).map(|_| ())
+    ) * (
+        (token_base!("e") | token_base!("E")) *
+        (token_base!("+") | token_base!("-")).to_try() *
+        digit1()
+    ).to_try()).map(|_| ())
+}
+
+fn digit1<'a>() -> Parser!(()) {
+    let fc = |c: char| c.is_ascii_digit();
+    fn fp(i: &str) -> (Option<()>, &str) {
+        let mut bytes = i.bytes();
+        let mut offset = 0;
+        loop {
+            let x = bytes.next().unwrap();
+            if x.is_ascii_digit() {
+                offset += 1;
+            } else {
+                break;
+            }
+        }
+        if offset == 0 {
+            (None, i)
+        } else {
+            (Some(()), unsafe{i.get_unchecked(offset..)})
+        }
+    }
+    Parser::new(fc, fp)
 }
