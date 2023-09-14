@@ -276,7 +276,19 @@ macro_rules! token_base {
                     )
                 }
             }
-            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+            fn fl(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
+                if let Some(o) = input.strip_prefix($p) {
+                    let loc_parse = loc.update($p);
+                    (Some($p), o, loc_parse.0)
+                } else {
+                    (
+                        None,
+                        input,
+                        loc
+                    )
+                }
+            }
+            Parser(fc, f, fl, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
         }
     };
 }
@@ -298,7 +310,19 @@ macro_rules! token_throw {
                     )
                 }
             }
-            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
+            fn fl(input: &str, loc: Location) -> (Option<()>, &str, Location) {
+                if let Some(o) = input.strip_prefix($p) {
+                    let loc_parse = loc.update($p);
+                    (Some(()), o, loc_parse.0)
+                } else {
+                    (
+                        None,
+                        input,
+                        loc
+                    )
+                }
+            }
+            Parser(fc, f, fl, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
         }
     };
 }
@@ -320,7 +344,19 @@ macro_rules! split_token {
                     )
                 }
             }
-            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
+            fn fl(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
+                if let Some(o) = input.split_once($p) {
+                    let loc_parse = loc.update($p);
+                    (Some(o.0), o.1, loc_parse.0)
+                } else {
+                    (
+                        None,
+                        input,
+                        loc
+                    )
+                }
+            }
+            Parser(fc, f, fl, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<&str>)
         }
     };
 }
@@ -343,7 +379,19 @@ macro_rules! whitespace {
                 }
                 (Some(()), unsafe{input.get_unchecked(idx..)})
             }
-            Parser(fc, f, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
+            fn fl(input: &str, loc: Location) -> (Option<()>, &str, Location) {
+                let mut idx = 0;
+                let mut loc = loc;
+                loop {
+                    match input.bytes().nth(idx) {
+                        Some(b' ') | Some(b'\t') => {idx += 1;loc.col += 1;loc.offset += 1;}
+                        Some(b'\n') | Some(b'\r') => {idx += 1;loc.col += 1;loc.offset += 1;loc.line += 1;}
+                        _ => {break;}
+                    }
+                }
+                (Some(()), unsafe{input.get_unchecked(idx..)}, loc)
+            }
+            Parser(fc, f, fl, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
         }
     };
 }
@@ -397,7 +445,19 @@ macro_rules! or_parser {
             )*
             (None, i)
         }
-        Parser::new(fcor, fp)
+        fn fl(i: &str, loc: Location) -> (Option<$t>, &str, Location) {
+            let first = i.bytes().next().unwrap() as char;
+            $(
+                if $x.0(first) {
+                    let ret = $x.2(i, loc);
+                    if ret.0.is_some() {
+                        return ret;
+                    }
+                }
+            )*
+            (None, i, loc)
+        }
+        Parser::new(fcor, fp, fl)
     }};
 }
 
@@ -407,7 +467,8 @@ macro_rules! tobox {
         {
             let fc = |c| Box::new($p.0)(c);
             let f = |input| Box::new($p.1)(input);
-            Parser::new(fc, f)
+            let fl = |input, loc| Box::new($p.2)(input, loc);
+            Parser::new(fc, f, fl)
         }
     };
 }
@@ -415,7 +476,7 @@ macro_rules! tobox {
 #[macro_export]
 macro_rules! Parser {
     ($t: ty) => {
-        Parser<impl Fn(char) -> bool + Copy + 'a, impl Fn(&'a str) -> (Option<$t>, &'a str) + Copy, char, &'a str, $t>
+        Parser<impl Fn(char) -> bool + Copy + 'a, impl Fn(&'a str) -> (Option<$t>, &'a str) + Copy, impl Fn(&'a str, Location) -> (Option<$t>, &'a str, Location) + Copy, char, &'a str, $t>
     };
     () => {
         Parser<impl Fn(char) -> bool + Copy, impl Fn(&'a str) -> (Option<&'a str>, &'a str) + Copy, char, &'a str, &'a str>
@@ -432,44 +493,44 @@ pub fn float<'a>() -> Parser!(f64) {
     )
 }
 
-fn my_float_inner<'a>() -> Parser!(f64) {
+pub fn my_float_inner<'a>() -> Parser!(f64) {
     fn fp(i: &str) -> (Option<f64>, &str) {
         let x = float_inner().1(i);
-        match x.0 {
-            Some(_) => (Some({
-                let index = x.1.as_ptr() as usize - i.as_ptr() as usize;
-                let s = unsafe{i.get_unchecked(..index)}.parse::<f64>().unwrap();
-                s
-            }), x.1),
-            None => (None, i)
-        }
+        x
     }
-    Parser::new(
-        |c: char| c == '+' || c == '-' || c == '.' || c.is_ascii_digit(),
-        fp
-    )
+    //Parser::new(float_inner().0, fp)
+    Parser::new(|c: char| c.is_ascii_digit() || c == '-' || c == '.' || c == '+',
+    fp, float_inner().2)
 }
 
-fn float_inner<'a>() -> Parser!(()) {
-    ((token_base!("+") | token_base!("-")).to_try() * (
-        (digit1() * (token_base!(".") * digit1().to_try()).to_try()).map(|_| ())
-        | (token_base!(".") * digit1()).map(|_| ())
+fn float_inner<'a>() -> Parser!(f64) {
+    ((token_base!("+").map(|_| 1) | token_base!("-").map(|_| -1)).to_try().map(|x| x.unwrap_or(1)) * (
+        (digit1() * (token_base!(".") * digit1_size().to_try()).to_try()).map(|(i, x)| {
+            (i as f64) + x.map(|(_, t)| t.map(|(a, b)| (a as f64)/(10_i32.pow(b as u32) as f64)).unwrap_or(0 as f64)).unwrap_or(0.0)
+        })
+        | (token_base!(".") * digit1_size()).map(|(_, (x, size))| (x as f64)/(10_i32.pow(size as u32) as f64))
     ) * (
         (token_base!("e") | token_base!("E")) *
-        (token_base!("+") | token_base!("-")).to_try() *
+        (token_base!("+").map(|_| true) | token_base!("-").map(|_| false)).to_try().map(|x| x.unwrap_or(true)) *
         digit1()
-    ).to_try()).map(|_| ())
+    ).map(|((_, sign), num)| if sign {
+        10_i32.pow(num as u32) as f64
+    } else {
+        1.0/10_i32.pow(num as u32) as f64
+    }).to_try().map(|x| x.unwrap_or(1.0))).map(|((sign, num), base)| (sign as f64) * num * base)
 }
 
-fn digit1<'a>() -> Parser!(()) {
+fn digit1<'a>() -> Parser!(u64) {
     let fc = |c: char| c.is_ascii_digit();
-    fn fp(i: &str) -> (Option<()>, &str) {
+    fn fp(i: &str) -> (Option<u64>, &str) {
         let mut bytes = i.bytes();
         let mut offset = 0;
+        let mut ret: u64 = 0;
         loop {
             let x = bytes.next().unwrap();
             if x.is_ascii_digit() {
                 offset += 1;
+                ret = ret * 10 + (x - b'0') as u64;
             } else {
                 break;
             }
@@ -477,8 +538,76 @@ fn digit1<'a>() -> Parser!(()) {
         if offset == 0 {
             (None, i)
         } else {
-            (Some(()), unsafe{i.get_unchecked(offset..)})
+            (Some(ret), unsafe{i.get_unchecked(offset..)})
         }
     }
-    Parser::new(fc, fp)
+    fn fl(i: &str, loc: Location) -> (Option<u64>, &str, Location) {
+        let mut bytes = i.bytes();
+        let mut offset = 0;
+        let mut ret: u64 = 0;
+        let mut loc = loc;
+        loop {
+            let x = bytes.next().unwrap();
+            if x.is_ascii_digit() {
+                offset += 1;
+                ret = ret * 10 + (x - b'0') as u64;
+            } else {
+                break;
+            }
+        }
+        if offset == 0 {
+            (None, i, loc)
+        } else {
+            loc.offset += offset;
+            loc.col += offset;
+            (Some(ret), unsafe{i.get_unchecked(offset..)}, loc)
+        }
+    }
+    Parser::new(fc, fp, fl)
+}
+
+fn digit1_size<'a>() -> Parser!((u64, u64)) {
+    let fc = |c: char| c.is_ascii_digit();
+    fn fp(i: &str) -> (Option<(u64, u64)>, &str) {
+        let mut bytes = i.bytes();
+        let mut offset = 0;
+        let mut ret: u64 = 0;
+        loop {
+            let x = bytes.next().unwrap();
+            if x.is_ascii_digit() {
+                offset += 1;
+                ret = ret * 10 + (x - b'0') as u64;
+            } else {
+                break;
+            }
+        }
+        if offset == 0 {
+            (None, i)
+        } else {
+            (Some((ret, offset as u64)), unsafe{i.get_unchecked(offset..)})
+        }
+    }
+    fn fl(i: &str, loc: Location) -> (Option<(u64, u64)>, &str, Location) {
+        let mut bytes = i.bytes();
+        let mut offset = 0;
+        let mut ret: u64 = 0;
+        let mut loc = loc;
+        loop {
+            let x = bytes.next().unwrap();
+            if x.is_ascii_digit() {
+                offset += 1;
+                ret = ret * 10 + (x - b'0') as u64;
+            } else {
+                break;
+            }
+        }
+        if offset == 0 {
+            (None, i, loc)
+        } else {
+            loc.offset += offset;
+            loc.col += offset;
+            (Some((ret, offset as u64)), unsafe{i.get_unchecked(offset..)}, loc)
+        }
+    }
+    Parser::new(fc, fp, fl)
 }
