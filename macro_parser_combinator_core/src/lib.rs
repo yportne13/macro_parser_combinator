@@ -278,8 +278,33 @@ macro_rules! token_base {
             }
             fn fl(input: &str, loc: Location) -> (Option<&str>, &str, Location) {
                 if let Some(o) = input.strip_prefix($p) {
-                    let loc_parse = loc.update($p);
-                    (Some($p), o, loc_parse.0)
+                    const TOTAL_LEN: (usize, usize, usize) = {
+                        let mut offset = 0;
+                        let mut line = 0;
+                        let mut col = 0;
+                        let mut arr = $p.as_bytes();
+                        while let [x, xs @ ..] = arr {
+                            offset += 1;
+                            if *x == b'\n' || *x == b'\r' {
+                                line += 1;
+                                col = 1;
+                            } else {
+                                col += 1;
+                            }
+                            arr = xs;
+                        }
+                        (offset, line, col)
+                    };
+                    let mut loc = loc;
+                    if TOTAL_LEN.1 == 0 {
+                        loc.offset += TOTAL_LEN.0;
+                        loc.col += TOTAL_LEN.2;
+                    } else {
+                        loc.offset += TOTAL_LEN.0;
+                        loc.line += TOTAL_LEN.1;
+                        loc.col = TOTAL_LEN.2;
+                    }
+                    (Some($p), o, loc)
                 } else {
                     (
                         None,
@@ -312,8 +337,33 @@ macro_rules! token_throw {
             }
             fn fl(input: &str, loc: Location) -> (Option<()>, &str, Location) {
                 if let Some(o) = input.strip_prefix($p) {
-                    let loc_parse = loc.update($p);
-                    (Some(()), o, loc_parse.0)
+                    const TOTAL_LEN: (usize, usize, usize) = {
+                        let mut offset = 0;
+                        let mut line = 0;
+                        let mut col = 0;
+                        let mut arr = $p.as_bytes();
+                        while let [x, xs @ ..] = arr {
+                            offset += 1;
+                            if *x == b'\n' || *x == b'\r' {
+                                line += 1;
+                                col = 1;
+                            } else {
+                                col += 1;
+                            }
+                            arr = xs;
+                        }
+                        (offset, line, col)
+                    };
+                    let mut loc = loc;
+                    if TOTAL_LEN.1 == 0 {
+                        loc.offset += TOTAL_LEN.0;
+                        loc.col += TOTAL_LEN.2;
+                    } else {
+                        loc.offset += TOTAL_LEN.0;
+                        loc.line += TOTAL_LEN.1;
+                        loc.col = TOTAL_LEN.2;
+                    }
+                    (Some(()), o, loc)
                 } else {
                     (
                         None,
@@ -384,11 +434,12 @@ macro_rules! whitespace {
                 let mut loc = loc;
                 loop {
                     match input.bytes().nth(idx) {
-                        Some(b' ') | Some(b'\t') => {idx += 1;loc.col += 1;loc.offset += 1;}
-                        Some(b'\n') | Some(b'\r') => {idx += 1;loc.col += 1;loc.offset += 1;loc.line += 1;}
+                        Some(b' ') | Some(b'\t') => {idx += 1;loc.col += 1;}
+                        Some(b'\n') | Some(b'\r') => {idx += 1;loc.col = 1;loc.line += 1;}
                         _ => {break;}
                     }
                 }
+                loc.offset += idx;
                 (Some(()), unsafe{input.get_unchecked(idx..)}, loc)
             }
             Parser(fc, f, fl, std::marker::PhantomData::<char>, std::marker::PhantomData::<&str>, std::marker::PhantomData::<()>)
@@ -498,9 +549,19 @@ pub fn my_float_inner<'a>() -> Parser!(f64) {
         let x = float_inner().1(i);
         x
     }
+    fn fl(i: &str, loc: Location) -> (Option<f64>, &str, Location) {
+        let x = float_inner().2(i, loc);
+        let mut loc = loc;
+        let fst = i.as_ptr();
+        let snd = x.1.as_ptr();
+        let size = snd as usize - fst as usize;
+        loc.col += size;
+        loc.offset += size;
+        (x.0, x.1, loc)
+    }
     //Parser::new(float_inner().0, fp)
     Parser::new(|c: char| c.is_ascii_digit() || c == '-' || c == '.' || c == '+',
-    fp, float_inner().2)
+    fp, fl)
 }
 
 fn float_inner<'a>() -> Parser!(f64) {

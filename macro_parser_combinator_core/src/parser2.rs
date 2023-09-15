@@ -41,6 +41,9 @@ where
     pub fn run(&self, input: Is) -> Option<O> {
         self.run_with_out(input).0
     }
+    pub fn run_loc(&self, input: Is) -> Option<O> {
+        self.2(input, Default::default()).0
+    }
     pub fn to_try(self) -> ParserType!(Option<O>) {
         let ff = |_| true;
         let fp = move |input: Is| {
