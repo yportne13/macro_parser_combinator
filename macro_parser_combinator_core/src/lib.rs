@@ -285,7 +285,7 @@ macro_rules! token_base {
                         let mut arr = $p.as_bytes();
                         while let [x, xs @ ..] = arr {
                             offset += 1;
-                            if *x == b'\n' || *x == b'\r' {
+                            if *x == b'\n' {
                                 line += 1;
                                 col = 1;
                             } else {
@@ -344,7 +344,7 @@ macro_rules! token_throw {
                         let mut arr = $p.as_bytes();
                         while let [x, xs @ ..] = arr {
                             offset += 1;
-                            if *x == b'\n' || *x == b'\r' {
+                            if *x == b'\n' {
                                 line += 1;
                                 col = 1;
                             } else {
@@ -434,8 +434,8 @@ macro_rules! whitespace {
                 let mut loc = loc;
                 loop {
                     match input.bytes().nth(idx) {
-                        Some(b' ') | Some(b'\t') => {idx += 1;loc.col += 1;}
-                        Some(b'\n') | Some(b'\r') => {idx += 1;loc.col = 1;loc.line += 1;}
+                        Some(b' ') | Some(b'\t') | Some(b'\r') => {idx += 1;loc.col += 1;}
+                        Some(b'\n') => {idx += 1;loc.col = 1;loc.line += 1;}
                         _ => {break;}
                     }
                 }
